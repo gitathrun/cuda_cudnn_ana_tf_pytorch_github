@@ -15,7 +15,7 @@ LABEL maintainer "Teng Fu <teng.fu@teleware.com>"
 
 # previous run
 # RUN conda install pytorch torchvision magma-cuda90 cuda90 -c pytorch && conda clean -ya
-RUN conda install conda install pytorch torchvision -c pytorch && conda clean -ya
+RUN conda install pytorch torchvision -c pytorch && conda clean -ya
 
 ENV NVIDIA_VISIBLE_DEVICES all
 ENV NVIDIA_DRIVER_CAPABILITIES compute,utility
