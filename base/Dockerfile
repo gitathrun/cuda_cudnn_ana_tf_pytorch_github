@@ -53,10 +53,10 @@ RUN jupyter labextension install @ryantam626/jupyterlab_code_formatter
 
 # for some other packages
 RUN apt-get update --fix-missing && \
-    apt-get install -y --no-install-recommends && \
-    unzip && \
-    zip && \
-    curl && \
+    apt-get install -y --no-install-recommends \
+    unzip \
+    zip \
+    curl \
     tree
 
 # get tini and installed
