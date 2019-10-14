@@ -1,87 +1,64 @@
 # for a docker image with:
-# CUDA 9.0 + cuDNN 7.x
-# NCCL 2.x
-# Anaconda 5.2 (python 3.6.5)
-# cuda_cudnn_ana_base:9.0-7.2-5.3
-# cuda_cudnn_ana_base:latest
+# CUDA 10.0.130 
+# cuDNN 7.4.1.5
+# NCCL 2.4.2
+# Anaconda naconda3-2019.07-Linux-x86_64.sh (python 3.7.5)
 
-# tensorflow dockerfile
-# line 1 - 51
-FROM nvidia/cuda:9.0-base-ubuntu16.04
+# base
+FROM nvidia/cuda:10.0-devel-ubuntu16.04
 
-# the maintainer information
+# devel-- cudnn
 LABEL maintainer "Teng Fu <teng.fu@teleware.com>"
 
-# cuDNN installation
-# NCCL installation
+# ENV CUDNN_VERSION 7.6.0.64
+# latest tf 1.15 and tf 2.0 rc supports 7.4
+ENV CUDNN_VERSION 7.4.1.5
+
+LABEL com.nvidia.cudnn.version="${CUDNN_VERSION}"
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        build-essential \
-        cuda-command-line-tools-9-0 \
-        cuda-cublas-dev-9-0 \
-        cuda-cudart-dev-9-0 \
-        cuda-cufft-dev-9-0 \
-        cuda-curand-dev-9-0 \
-        cuda-cusolver-dev-9-0 \
-        cuda-cusparse-dev-9-0 \
-        libcudnn7=7.2.1.38-1+cuda9.0 \
-        libcudnn7-dev=7.2.1.38-1+cuda9.0 \
-        libnccl2=2.2.13-1+cuda9.0 \
-        libnccl-dev=2.2.13-1+cuda9.0 \
-        libcurl3-dev \
-        libfreetype6-dev \
-        libhdf5-serial-dev \
-        libpng12-dev \
-        libzmq3-dev \
-        pkg-config \
-        python-dev \
-        rsync \
-        software-properties-common \
-        unzip \
-        zip \
-        zlib1g-dev \
-        wget \
-        curl \
-        git \
-        && \
-    rm -rf /var/lib/apt/lists/* && \
-    find /usr/local/cuda-9.0/lib64/ -type f -name 'lib*_static.a' -not -name 'libcudart_static.a' -delete && \
-    rm /usr/lib/x86_64-linux-gnu/libcudnn_static_v7.a
-
-RUN apt-get update && \
-        apt-get install nvinfer-runtime-trt-repo-ubuntu1604-4.0.1-ga-cuda9.0 && \
-        apt-get update && \
-        apt-get install libnvinfer4=4.1.2-1+cuda9.0 && \
-        apt-get install libnvinfer-dev=4.1.2-1+cuda9.0
-
-# Link NCCL libray and header where the build script expects them.
-RUN mkdir /usr/local/cuda-9.0/lib &&  \
-    ln -s /usr/lib/x86_64-linux-gnu/libnccl.so.2 /usr/local/cuda/lib/libnccl.so.2 && \
-    ln -s /usr/include/nccl.h /usr/local/cuda/include/nccl.h
-
-# pip installation
-RUN curl -fSsL -O https://bootstrap.pypa.io/get-pip.py && \
-    python get-pip.py && \
-    rm get-pip.py
+            libcudnn7=$CUDNN_VERSION-1+cuda10.0 \
+            libcudnn7-dev=$CUDNN_VERSION-1+cuda10.0 && \
+            libnccl-devel-$NCCL_VERSION-1+cuda10.0 && \
+            libnccl-static-$NCCL_VERSION-1+cuda10.0 && \
+    apt-mark hold libcudnn7 && \
+    rm -rf /var/lib/apt/lists/*
 
 # -------------------------------------------
 # Anaconda installation
-# https://github.com/ContinuumIO/docker-images/blob/master/anaconda/Dockerfile
+# https://github.com/ContinuumIO/docker-images/blob/master/anaconda3/debian/Dockerfile
+
 ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
 ENV PATH /opt/conda/bin:$PATH
 
-RUN apt-get update --fix-missing && apt-get install -y wget bzip2 ca-certificates \
-    libglib2.0-0 libxext6 libsm6 libxrender1 \
-    git mercurial subversion
+RUN apt-get update --fix-missing && \
+    apt-get install -y wget bzip2 ca-certificates libglib2.0-0 libxext6 libsm6 libxrender1 git mercurial subversion && \
+    apt-get clean
 
-# download and install the anaconda
-# anaconda 2 is python 2.7
-# anaconda 3 is python 3.6 (after 4.2.0 is python 3.6, below is python3.5)
-RUN wget --quiet https://repo.anaconda.com/archive/Anaconda3-5.2.0-Linux-x86_64.sh -O ~/anaconda.sh && \
+RUN wget --quiet https://repo.anaconda.com/archive/Anaconda3-2019.07-Linux-x86_64.sh -O ~/anaconda.sh && \
     /bin/bash ~/anaconda.sh -b -p /opt/conda && \
     rm ~/anaconda.sh && \
     ln -s /opt/conda/etc/profile.d/conda.sh /etc/profile.d/conda.sh && \
     echo ". /opt/conda/etc/profile.d/conda.sh" >> ~/.bashrc && \
-    echo "conda activate base" >> ~/.bashrc
+    echo "conda activate base" >> ~/.bashrc && \
+    find /opt/conda/ -follow -type f -name '*.a' -delete && \
+    find /opt/conda/ -follow -type f -name '*.js.map' -delete && \
+    /opt/conda/bin/conda clean -afy
+
+# install jupyterlab extensions
+RUN conda config --add channels conda-forge
+RUN	conda install -c conda-forge -y nodejs black jupyterlab_code_formatter
+RUN jupyter labextension install @jupyterlab/toc
+RUN jupyter labextension install @lckr/jupyterlab_variableinspector
+RUN jupyter labextension install @ryantam626/jupyterlab_code_formatter
+
+# for some other packages
+RUN apt-get update --fix-missing && \
+    apt-get install -y --no-install-recommends && \
+    unzip && \
+    zip && \
+    curl && \
+    tree
 
 # get tini and installed
 # tini is PID management software to avoid any abuse of PID in OS level
@@ -92,14 +69,14 @@ RUN apt-get install -y curl grep sed dpkg && \
     rm tini.deb && \
     apt-get clean
 
-# part of the tensorflow dockder file for tensorflow build
-# line 53-67
+# pip installation
+RUN curl "https://bootstrap.pypa.io/get-pip.py" -o "get-pip.py" && \
+    python get-pip.py && \
+    rm get-pip.py
+
+# install dvc
 RUN pip --no-cache-dir install \
-        keras_applications \
-        keras_preprocessing \
-        mock \
-        && \
-    python -m ipykernel.kernelspec
+    dvc
 
 # Set up our notebook config.
 COPY ./base/jupyter_notebook_config.py /root/.jupyter/
@@ -108,6 +85,7 @@ COPY ./base/jupyter_notebook_config.py /root/.jupyter/
 #   https://github.com/ipython/ipython/issues/7062
 # We just add a little wrapper script.
 COPY ./base/run_jupyter.sh /
+RUN chmod +x /run_jupyter.sh
 
 # the default volume shared with host machine directory
 # in the docker run 
